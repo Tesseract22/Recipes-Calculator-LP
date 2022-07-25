@@ -91,6 +91,7 @@ class RecipeMatrix:
         
         # Add taxes to all recipe
         self.matrix = AddTaxes(self.matrix)
+        self.shape = self.matrix.shape
 
 
     '''
@@ -110,6 +111,9 @@ class RecipeMatrix:
             if p not in self.raw_idxes:
                 raise KeyError("Item %i not in self.raw_idxes"%p)
             res[p] = pow(level_ratio, l - i)
+        # Put a minimal value to raw recipe
+        for r in self.raw_idxes:
+            res[r] = max(res[r], 5)
         # tax
         res[-1] = 1
         return res
@@ -160,7 +164,7 @@ class RecipeMatrix:
         # the bound of x_i, are by default 0 - inf
         opt = linprog(c=obj_func, A_ub=lhs_ineq, b_ub=rhs_ineq, A_eq=lhs_eq, b_eq= rhs_eq, method="revised simplex")
         return opt
-        
+
     '''
     ---debug---
     '''
@@ -188,7 +192,6 @@ if __name__ == "__main__":
 
     '''
     This is a test scene toke from the game factrio
-    item: heavy, light, gas, water, oil
     item: heavy, light, gas, water, oil
     raw: water, oil
     recipe:
