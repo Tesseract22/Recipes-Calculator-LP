@@ -1,7 +1,11 @@
 from scipy.optimize import linprog
 import numpy as np
-import numpy.linalg as la
-import itertools
+
+
+
+
+
+
 '''
 Add a pseudo, cost-free recipe in the matrix for matrix 
 
@@ -15,47 +19,12 @@ def AddRaw(matrix: np.array, raw_idx: int) -> np.array:
     new_col[raw_idx] = 1
     return np.append(matrix, new_col, axis=1)
 
-'''
-Add pseudo, cost-only recipes for all item in matrix
 
-matrix: the matrix that needed to be added
-
-Returns the new matrix with the pseudo recipe
-'''
-def AddWaste(matrix: np.array, waste_idx: int):
-    new_col = np.zeros((matrix.shape[0], 1))
-    new_col[waste_idx] = -1 
-    return np.append(matrix, new_col, axis=1)
 
 '''
-Find the recipe in the matrix that have alternate
+Find the location of resources that needed to be add as waste (result of a recipe that has more than one result).
 
-matrix: the recipe matrix
-
-Returns the col idx of these recieps in a list
-'''
-def FindAlt(matrix: np.array) -> list:
-    res = []
-    # iterate each row
-    # if there is more than one cell in a row with value > 0
-    # that means the corresponding recipe in that col
-    # is what we need to find 
-    for row in range(matrix.shape[0]):
-        potential_res = []
-        c = 0
-        for col in range(matrix.shape[1]):
-            if matrix[row, col] > 0:
-                c += 1
-                potential_res.append(col)
-        if c >= 2:
-            res.extend(potential_res)
-    
-    return list(set(res))
-
-'''
-Find the location of resources that needed to be add as waste (result of a recipe that has more than one result)
-
-matrix:
+matrix: 
 
 Returns the idx in list
 ''' 
@@ -73,40 +42,34 @@ def FindWaste(matrix:np.array) -> list:
     return list(set(res))
 
 '''
----NEED DOCUMENTATION---
+Add the pseudo "taxes" item and recipe to the matrix. Tax are used to decrease the excess in output, which have the lowest priority by default.
+
+matrix:
+
+Returns the new matrix
 '''
 def AddTaxes(matrix:np.array):
+    # Add a pseudo item in matrix. All recipes would consume 1 unit of tax.
+    # It is not neccessary to add tax for pseudo raw input recipes, but here we do it anyway
     new_row = -np.ones((1, matrix.shape[1]))
     matrix = np.append(matrix, new_row, axis=0)
+
+    # We here treat tax has raw input item. -1 represents the last row, which is the tax item we just added.
     matrix = AddRaw(matrix, -1)
+
+    # In LP we would set the balance of tax to 0, meaning we would never have excess in taxes.
+    # Later we woild put the pseudo input taxes recipe in object function with the lowest priority.
     return matrix
 
-'''
-Compare the two ans using the given priority.
-
-a: ans 1
-b: ans 2
-priority: a list that contains which element should be compare first; move the next element if the current element is equal
-
-Returns the ans that wins
-'''
-def CompAns(a:np.array, b:np.array, priority:list) -> np.array:
-    for idx in priority:
-        if a[idx] < b[idx]:
-            return a
-        elif a[idx] > b[idx]:
-            return b
-    return b
 
 
 
 '''
-A wrapper for 2d numpy array
+A wrapper for 2d-numpy-array
 
-Can Add and mark raw pseudo recipe
-Can Add and mark waste pseudo recipe
-Can locate alt recipes
-Can calculate
+self.matrix: the matrix where we perform all the operations. Notice that it should have different shape as the original matrix
+self.orginal_raw_idxes: store the indexes of raw input items in the row
+self.raw_idxes: store the indexes of pseudo raw input recipes in the col
 '''
 class RecipeMatrix:
 
@@ -121,16 +84,6 @@ class RecipeMatrix:
     '''
     def __init__(self, matrix:np.array, raw_idxes:list) -> None:
         self.matrix = np.copy(matrix)
-
-        # self.alt_idxes = FindAlt(matrix) # This is only used for LA, finding recipes that have alternatives
-
-        # self.waste_idxes = [] # This is only used for LA
-        # self.original_waste_idxes = FindWaste(matrix) # This is only used for LA
-
-        # for i in self.original_waste_idxes: # dont need this for LP
-        #     self.waste_idxes.append(self.matrix.shape[1])
-        #     self.matrix = AddWaste(self.matrix ,i)
-
         self.raw_idxes = []
         for i in raw_idxes:
             self.raw_idxes.append(self.matrix.shape[1])
@@ -138,63 +91,7 @@ class RecipeMatrix:
         
         # Add taxes to all recipe
         self.matrix = AddTaxes(self.matrix)
-        
-        
-    '''
-    Zero out (delete) the combinations of recipes (col) in matrix
 
-    Returns an iterable of the new matrixes
-    '''
-    def ZeroOut(self) -> list:
-        specials = []
-        specials.extend(self.alt_idxes)
-        specials.extend(self.waste_idxes)
-        print(len(specials), self.matrix.shape[1] - self.matrix.shape[0])
-        combs = itertools.combinations(specials, self.matrix.shape[1] - self.matrix.shape[0])
-        for comb in combs:
-            yield (np.delete(self.matrix, comb, axis=1), np.sort(comb)) 
-
-    '''
-    Solve Ax = b with the given priority
-
-    matrix: should already have raw pseudo recipe
-    target: the desire output, must have the same size as the number of row in matrix
-    priority: the priority of the item in a list, item not in list would be not be considered
-
-    Returns the amount needed for each recipe in an array
-    '''
-    # This function is currently disabled. Calling it WILL cause error.
-    def Solve_Old(self, target, priority) -> np.array:
-        final_ans = np.zeros(self.matrix.shape[1])
-        final_ans.fill(np.inf)
-        for z in self.ZeroOut():
-            sub_matrix = z[0]
-            comb = z[1]
-            
-            print(comb)
-            try:
-                ans = la.solve(sub_matrix, target)
-            except la.LinAlgError:
-                continue
-            true_ans = np.zeros(self.matrix.shape[1])
-            comb_idx = 0
-            ans_idx = 0
-            for i in range(self.matrix.shape[1]):
-                if comb_idx < len(comb) and i == comb[comb_idx]:
-                    comb_idx += 1
-                else:
-                    true_ans[i] = ans[ans_idx]
-                    ans_idx += 1
-            # print(true_ans)
-            test_flag = True
-            for i in range(len(true_ans)):
-                if true_ans[i] < 0:
-                    print(i, end=" ")
-                    test_flag = False
-                    break
-            if test_flag:
-                final_ans = CompAns(final_ans, true_ans, priority)
-        return final_ans
 
     '''
     Constructs the object function with priority list. The item on the higher level would have 10x the "value" of the lower level.
@@ -218,22 +115,27 @@ class RecipeMatrix:
         return res
 
     '''
-    Construc the left and right inequalities for LP
+    Construc the left and right inequalities for LP.
 
     target: used to construct right hand inequalities
 
-    Returns two matrix, representing each ineq
+    Returns two matrix, representing each ineq.
     '''
-    def Inequalities(self, target) -> np.array:
+    def Inequalities(self, target:np.array) -> np.array:
         # scipy default set to less or equal to, <=, but we want >=
         # so we need to multiply our result by -1
+        
+        # Everythng in the matrix except the last row
         lhs_ineq = -self.matrix[:-1, :]
+        # Just the target
         rhs_ineq = -target
         return lhs_ineq, rhs_ineq
 
 
     '''
-    ---NEED DOCUMENTATION---
+    Construc the left and right equalities for LP. The only one we need here is tax equality.
+
+    Returns two matrix, representing each eq.
     '''
     def Equalities(self) -> np.array:
         # TAXES!
@@ -244,12 +146,12 @@ class RecipeMatrix:
 
 
     '''
-    Solving the problem with linear programming
+    Solving the problem with linear programming.
 
     target: the desire output in a np.array
     priority: the prioritiy used to construct the object function params
 
-    Returns the amount needed for each recipe in an array
+    Returns the amount needed for each recipe in an array.
     '''
     def Solve(self, target, priority):
         lhs_ineq, rhs_ineq = self.Inequalities(target)
@@ -258,7 +160,10 @@ class RecipeMatrix:
         # the bound of x_i, are by default 0 - inf
         opt = linprog(c=obj_func, A_ub=lhs_ineq, b_ub=rhs_ineq, A_eq=lhs_eq, b_eq= rhs_eq, method="revised simplex")
         return opt
-
+        
+    '''
+    ---debug---
+    '''
     def PrintAns(self, ans, recipe_name_list):
         for i in range(len(ans)):
             if ans[i] == 0:
@@ -269,28 +174,6 @@ class RecipeMatrix:
                 print(i, ans[i])
             elif i in self.raw_idxes:
                 print(i, ans[i])
-    # '''
-    # Debug function
-    # '''
-    # def ItemIdxToStr(self, i):
-    #     if i in self.waste_idxes:
-    #         org_i = self.original_waste_idxes(self.waste_idxes.index(i))
-    #         return self.items[org_i]
-    #     elif i < len(self.items):
-    #         return self.items[i]
-    #     else:
-    #         return "?Not found?"
-
-    # '''
-    # Debug function
-    # '''
-    # def PrintPriority(self, priority):
-    #     of = self.ObjFunc(priority)
-    #     for i in range(len(of)):
-    #         if of[i] == 0:
-    #             continue
-    #         print(of[i], self.ItemIdxToStr(i))
-    #     pass
 
 
     
@@ -305,6 +188,7 @@ if __name__ == "__main__":
 
     '''
     This is a test scene toke from the game factrio
+    item: heavy, light, gas, water, oil
     item: heavy, light, gas, water, oil
     raw: water, oil
     recipe:
@@ -323,7 +207,7 @@ if __name__ == "__main__":
         [-30, -30, 0, -50],
         [0, 0, -100, -100],
     ])
-    # 10 heavy and 100 gas
+    # 300 gas
     b = np.array([0, 0, 300, 0, 0])
     p = [5 ,4] # oil > water
 
