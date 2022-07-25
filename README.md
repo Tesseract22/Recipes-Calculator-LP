@@ -15,10 +15,10 @@ Ley say we have 5 items: `heavy oil`, `light oil`, `petroleum-gas`, `water`, `oi
         `100 crude oil + 50 water = 10 heavy oil + 45 light oil + 55 petroleum-gas`\
 
 That gives us the matrix: \
-`[-40, 0, 30, 10],`\
+`[[-40, 0, 30, 10],`\
 `[30, -30, 30, 45],`\
 `[0, 20, 40, 55],`\
 `[-30, -30, 0, -50],`\
-`[0, 0, -100, -10 ],`\
+`[0, 0, -100, -10 ],]`\
 (A Graph!)
 By doing this we can ignore the recipe and item names, only focus on the structure of the items. Of course you want to build a functional calculator
