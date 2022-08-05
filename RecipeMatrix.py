@@ -1,3 +1,4 @@
+
 from scipy.optimize import linprog
 import numpy as np
 
@@ -8,10 +9,8 @@ import numpy as np
 
 '''
 Add a pseudo, cost-free recipe in the matrix for matrix 
-
 matrix: the matrix that needed to be added
 raw_idx: the designated idx of the raw_material in the matrix
-
 Returns the new matrix with the pseudo recipe
 '''
 def AddRaw(matrix: np.array, raw_idx: int) -> np.array:
@@ -23,9 +22,7 @@ def AddRaw(matrix: np.array, raw_idx: int) -> np.array:
 
 '''
 Find the location of resources that needed to be add as waste (result of a recipe that has more than one result).
-
 matrix: 
-
 Returns the idx in list
 ''' 
 def FindWaste(matrix:np.array) -> list:
@@ -43,9 +40,7 @@ def FindWaste(matrix:np.array) -> list:
 
 '''
 Add the pseudo "taxes" item and recipe to the matrix. Tax are used to decrease the excess in output, which have the lowest priority by default.
-
 matrix:
-
 Returns the new matrix
 '''
 def AddTaxes(matrix:np.array):
@@ -64,25 +59,23 @@ def AddTaxes(matrix:np.array):
 
 
 
-'''
-A wrapper for 2d-numpy-array
-
-self.matrix: the matrix where we perform all the operations. Notice that it should have different shape as the original matrix
-self.orginal_raw_idxes: store the indexes of raw input items in the row
-self.raw_idxes: store the indexes of pseudo raw input recipes in the col
-'''
 class RecipeMatrix:
 
-
-
     '''
-    Initialize the object, add pseduo recipe and locate alt recipes in the matrix
-
-    self:
-    matrix: the recipe matrix, or graph matrix
-    raw_idxes: the idxes have the elment you want to appoint as raw material
+    A wrapper for 2d-numpy-array
+    self.matrix: the matrix where we perform all the operations. Notice that it should have different shape as the original matrix
+    self.orginal_raw_idxes: store the indexes of raw input items in the row
+    self.raw_idxes: store the indexes of pseudo raw input recipes in the col
     '''
+
+
     def __init__(self, matrix:np.array, raw_idxes:list) -> None:
+        '''
+        Initialize the object, add pseduo recipe and locate alt recipes in the matrix
+        self:
+        matrix: the recipe matrix, or graph matrix
+        raw_idxes: the idxes have the elment you want to appoint as raw material
+        '''
         self.matrix = np.copy(matrix)
         self.raw_idxes = []
         for i in raw_idxes:
@@ -94,15 +87,14 @@ class RecipeMatrix:
         self.shape = self.matrix.shape
 
 
-    '''
-    Constructs the object function with priority list. The item on the higher level would have 10x the "value" of the lower level.
-
-    priority: only one item per level. ITEM IN LIST MUST ALSO BE IN self.raw_idxes
-    level_ration: determines the difference between levels; default value = 10.
-
-    Returns the object functon params.
-    '''
+    
     def ObjFunc(self, priority:list, level_ratio=10) -> np.array:
+        '''
+        Constructs the object function with priority list. The item on the higher level would have 10x the "value" of the lower level.
+        priority: only one item per level. ITEM IN LIST MUST ALSO BE IN self.raw_idxes
+        level_ration: determines the difference between levels; default value = 10.
+        Returns the object functon params.
+        '''
         # scipy default set to minimize object function, so no need to inverse sign
         l = len(priority)
         res = np.zeros(self.matrix.shape[1])
@@ -118,14 +110,13 @@ class RecipeMatrix:
         res[-1] = 1
         return res
 
-    '''
-    Construc the left and right inequalities for LP.
-
-    target: used to construct right hand inequalities
-
-    Returns two matrix, representing each ineq.
-    '''
+   
     def Inequalities(self, target:np.array) -> np.array:
+        '''
+        Construc the left and right inequalities for LP.
+        target: used to construct right hand inequalities
+        Returns two matrix, representing each ineq.
+        '''
         # scipy default set to less or equal to, <=, but we want >=
         # so we need to multiply our result by -1
         
@@ -136,12 +127,12 @@ class RecipeMatrix:
         return lhs_ineq, rhs_ineq
 
 
-    '''
-    Construc the left and right equalities for LP. The only one we need here is tax equality.
-
-    Returns two matrix, representing each eq.
-    '''
+    
     def Equalities(self) -> np.array:
+        '''
+        Construc the left and right equalities for LP. The only one we need here is tax equality.
+        Returns two matrix, representing each eq.
+        '''
         # TAXES!
         lhs_eq = [self.matrix[-1, :]]
         rhs_eq = [0]
@@ -149,26 +140,40 @@ class RecipeMatrix:
 
 
 
-    '''
-    Solving the problem with linear programming.
-
-    target: the desire output in a np.array
-    priority: the prioritiy used to construct the object function params
-
-    Returns the amount needed for each recipe in an array.
-    '''
+    
     def Solve(self, target, priority):
+        '''
+        Solving the problem with linear programming.
+        target: the desire output in a np.array
+        priority: the prioritiy used to construct the object function params
+        Returns the amount needed for each recipe in an array.
+        '''
         lhs_ineq, rhs_ineq = self.Inequalities(target)
         lhs_eq, rhs_eq = self.Equalities()
         obj_func = self.ObjFunc(priority)
         # the bound of x_i, are by default 0 - inf
-        opt = linprog(c=obj_func, A_ub=lhs_ineq, b_ub=rhs_ineq, A_eq=lhs_eq, b_eq= rhs_eq, method="revised simplex")
+        opt = linprog(c=obj_func, A_ub=lhs_ineq, b_ub=rhs_ineq, A_eq=lhs_eq, b_eq= rhs_eq, method="highs")
         return opt
 
-    '''
-    ---debug---
-    '''
+    def ItemsInvolve(self, x:np.array) -> list:
+        '''
+        Find the items involve in the given recipe weights
+        x: the recipe weights array
+        Returns a list of the correspoding idx of the items invloved.
+        '''
+        items = []
+        for i in range(self.shape[0] - 1): # ignore tax
+            for j in range(self.shape[1]):
+                if x[j] != 0 and self.matrix[i][j] != 0:
+                    items.append(i)
+                    break
+        return items
+    
+
     def PrintAns(self, ans, recipe_name_list):
+        '''
+        ---debug---
+        '''
         for i in range(len(ans)):
             if ans[i] == 0:
                 continue
@@ -199,7 +204,6 @@ if __name__ == "__main__":
         30 light + 30 water = 20 gas
         100 oil = 30 heavy + 30 light + 40 gas
         100 oil + 50 water = 10 heavy + 45 light + 55 gas
-
     Multiple recipe for one item
     '''
 
